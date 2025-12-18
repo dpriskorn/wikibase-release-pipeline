@@ -1,0 +1,117 @@
+name: wbs-deploy
+
+services:
+  # --------------------------------------------------
+  # A. CORE WIKIBASE SUITE SERVICES
+  # --------------------------------------------------
+
+  wikibase:
+    image: wikibase/wikibase:5
+    depends_on:
+      mysql:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+    restart: unless-stopped
+    volumes:
+      - ./config:/config:z
+      - ./config/extensions:/var/www/html/extensions/extensions:z
+      - ./config/Extensions.php:/var/www/html/LocalSettings.d/90_UserDefinedExtensions.php:z
+      - wikibase-image-data:/var/www/html/images
+      - quickstatements-data:/quickstatements/data
+    environment:
+      METADATA_CALLBACK: ${METADATA_CALLBACK}
+      MW_ADMIN_NAME: ${MW_ADMIN_NAME}
+      MW_ADMIN_PASS: ${MW_ADMIN_PASS}
+      MW_ADMIN_EMAIL: ${MW_ADMIN_EMAIL}
+      MW_WG_SERVER: https://${WIKIBASE_PUBLIC_HOST}
+      DB_SERVER: mysql:3306
+      DB_USER: ${DB_USER}
+      DB_PASS: ${DB_PASS}
+      DB_NAME: ${DB_NAME}
+      ELASTICSEARCH_HOST: elasticsearch
+      QUICKSTATEMENTS_PUBLIC_URL: https://${WIKIBASE_PUBLIC_HOST}/tools/quickstatements
+      # WDQS variables commented out for now
+      # WDQS_PUBLIC_ENDPOINT_URL: https://${WDQS_PUBLIC_HOST}/sparql
+      # WDQS_PUBLIC_FRONTEND_URL: https://${WDQS_PUBLIC_HOST}
+    healthcheck:
+      test: curl --silent --fail localhost/wiki/Main_Page
+      interval: 10s
+      start_period: 5m
+
+  wikibase-jobrunner:
+    image: wikibase/wikibase:5
+    command: /jobrunner-entrypoint.sh
+    depends_on:
+      wikibase:
+        condition: service_healthy
+    restart: unless-stopped
+    volumes_from:
+      - wikibase
+
+  mysql:
+    image: mariadb:10.11
+    restart: unless-stopped
+    volumes:
+      - mysql-data:/var/lib/mysql
+    environment:
+      MYSQL_DATABASE: ${DB_NAME}
+      MYSQL_USER: ${DB_USER}
+      MYSQL_PASSWORD: ${DB_PASS}
+      MYSQL_RANDOM_ROOT_PASSWORD: yes
+    healthcheck:
+      test: healthcheck.sh --connect --innodb_initialized
+      start_period: 1m
+      interval: 20s
+      timeout: 5s
+
+  elasticsearch:
+    image: wikibase/elasticsearch:1
+    restart: unless-stopped
+    volumes:
+      - elasticsearch-data:/usr/share/elasticsearch/data
+    environment:
+      discovery.type: single-node
+      ES_JAVA_OPTS: -Xms512m -Xmx512m -Dlog4j2.formatMsgNoLookups=true
+    healthcheck:
+      test: curl --silent --fail localhost:9200
+      interval: 10s
+      start_period: 2m
+
+  # --------------------------------------------------
+  # C. REVERSE PROXY AND SSL SERVICES
+  # --------------------------------------------------
+
+  traefik:
+    image: traefik:3
+    command:
+      - "--accesslog.format=common"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      - "--entrypoints.websecure.asdefault"
+      - "--entrypoints.websecure.http.tls.certresolver=letsencrypt"
+      - "--entrypoints.web.http.redirections.entryPoint.to=websecure"
+      - "--entrypoints.web.http.redirections.entryPoint.scheme=https"
+      - "--entrypoints.web.http.redirections.entrypoint.permanent=true"
+      - "--certificatesresolvers.letsencrypt.acme.httpchallenge=true"
+      - "--certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web"
+      - "--certificatesresolvers.letsencrypt.acme.email=${MW_ADMIN_EMAIL}"
+      - "--certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json"
+      - "--providers.file.filename=/etc/traefik/dynamic.yml"
+    restart: unless-stopped
+    ports:
+      - 80:80
+      - 443:443
+    volumes:
+      - ./config/traefik-dynamic.yml:/etc/traefik/dynamic.yml:ro
+      - traefik-letsencrypt-data:/letsencrypt
+    environment:
+      WIKIBASE_PUBLIC_HOST: ${WIKIBASE_PUBLIC_HOST}
+      # WDQS_PUBLIC_HOST: ${WDQS_PUBLIC_HOST} # commented out
+
+volumes:
+  wikibase-image-data:
+  mysql-data:
+  elasticsearch-data:
+  quickstatements-data:
+  traefik-letsencrypt-data:

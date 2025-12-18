@@ -1,0 +1,21 @@
+# Wikibase admin
+MW_ADMIN_NAME=admin
+MW_ADMIN_PASS=wikibasepass
+MW_ADMIN_EMAIL=admin@example.com
+
+# Wikibase server
+WIKIBASE_PUBLIC_HOST=localhost
+
+# Database
+DB_NAME=wikibase
+DB_USER=wikibase
+DB_PASS=wikibasepass
+
+# Disable callback for reproducibility
+METADATA_CALLBACK=false
+
+# Optional dummy WDQS variables (silence warnings)
+WDQS_PUBLIC_ENDPOINT_URL=http://localhost:9999/sparql
+WDQS_PUBLIC_FRONTEND_URL=http://localhost:9999
+
+METADATA_CALLBACK=false
