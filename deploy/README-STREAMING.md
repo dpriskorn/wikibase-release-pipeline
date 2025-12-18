@@ -10,7 +10,7 @@ Rename example-env to .env and edit to your liking
 
 then
 
-´$ docker compose --env-file .env -f docker-compose-no-wdqs.yml up --wait --build --env-file .env '
+´$ docker compose --env-file .env -f docker-compose-streaming.yml up --wait --build --env-file .env '
 
 ## Game plan
 1) clone all the parts ✅
